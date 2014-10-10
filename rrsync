@@ -1,4 +1,12 @@
 #!/usr/bin/perl
+#
+# #######################################
+# # modified rrsync to also allow mkdir #
+# #######################################
+# This is the original rrsync script modified to also allow creating multiple
+# sub directories within the restricted path. Rsync does not/cannot create
+# multiple subdirs so we allow this within the wrapper script.
+#
 # Name: /usr/local/bin/rrsync (should also have a symlink in /usr/bin)
 # Purpose: Restricts rsync to subdirectory declared in .ssh/authorized_keys
 # Author: Joe Smith <js-cgi@inwap.com> 30-Sep-2004
@@ -35,10 +43,29 @@ die "$0: Restricted directory does not exist!\n" if $subdir ne '/' && !-d $subdi
 # SSH_ORIGINAL_COMMAND=rsync --server          -vlogDtpr --partial . ARG # push
 # SSH_ORIGINAL_COMMAND=rsync --server --sender -vlogDtpr --partial . ARGS # pull
 # SSH_CONNECTION=client_addr client_port server_port
+#
+# In case of mkdir, the environment variable set by sshd looks like this:
+# SSH_ORIGINAL_COMMAND=mkdir folder1/folder2/
+# SSH_ORIGINAL_COMMAND=mkdir -p folder1/folder2/
 
 my $command = $ENV{SSH_ORIGINAL_COMMAND};
 die "$0: Not invoked via sshd\n$Usage"	unless defined $command;
-die "$0: SSH_ORIGINAL_COMMAND='$command' is not rsync\n" unless $command =~ s/^rsync\s+//;
+
+# check whether mkdir or rsync is called.
+if ($command =~ m/^mkdir/) { # validate and execute mkdir
+	if ($command =~ m/^mkdir\s+(-p)?\s+(\w+(\/\w+)*\/?)$/) {
+		exec("/bin/mkdir", "$subdir/$2", "-p") or die "Couldn't execute mkdir command!";
+		exit 0;
+	} else {
+		die "Sanity check of mkdir command failed!";
+	}
+} elsif ($command =~ m/^rsync/) {
+	# do nothing and continue rsync validation
+} else { # neither rsync nor mkdir was called. throwing error
+	die "Either rsync or mkdir must be called. Exiting";
+}
+
+die "$0: SSH_ORIGINAL_COMMAND='$command' is not rsync or mkdir!\n" unless $command =~ s/^(rsync|mkdir)\s+//;
 die "$0: --server option is not first\n" unless $command =~ /^--server\s/;
 our $am_sender = $command =~ /^--server\s+--sender\s/; # Restrictive on purpose!
 die "$0 -ro: sending to read-only server not allowed\n" if $ro && !$am_sender;
