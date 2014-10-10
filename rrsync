@@ -53,8 +53,18 @@ die "$0: Not invoked via sshd\n$Usage"	unless defined $command;
 
 # check whether mkdir or rsync is called.
 if ($command =~ m/^mkdir/) { # validate and execute mkdir
-	if ($command =~ m/^mkdir\s+(-p)?\s+(\w+(\/\w+)*\/?)$/) {
-		exec("/bin/mkdir", "$subdir/$2", "-p") or die "Couldn't execute mkdir command!";
+	if ($command =~ m/^mkdir\s+(-p)?\s+\/?(\w+(\/\w+)*\/?)$/) {
+		my $folder = $2;
+
+	        # remove leading slash. and convert path to regex
+		my $subdir_regex = quotemeta(substr($subdir, 1));
+
+		# if an absolute path is given, make it relative
+		if ($folder =~ m/^$subdir_regex/) {
+			$folder =~ s/^$subdir_regex\/?//g;
+		}
+		
+		exec("/bin/mkdir", "$subdir/$folder", "-p") or die "Couldn't execute mkdir command!";
 		exit 0;
 	} else {
 		die "Sanity check of mkdir command failed!";
